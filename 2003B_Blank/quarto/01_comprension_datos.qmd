@@ -1,0 +1,347 @@
+---
+title: "Comprensión de los datos"
+author: "Rafael Sánchez Ramírez"
+format:
+  html:
+    toc: true
+    toc-title: "Contenido"
+editor: visual
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+## Importación de los datos
+
+Para comenzar la comprensión de los datos, se utilizaron las bases proporcionadas por SIMA correspondientes a los años 2020 a 2025. Los archivos contienen información meteorológica y de contaminantes organizada por estación de monitoreo.
+
+```{r}
+library(readxl)
+library(dplyr)
+
+archivos <- list.files("../data", pattern = "\\.xlsx$", full.names = TRUE)
+```
+
+Se encontraron seis bases anuales, correspondientes al periodo de 2020 a 2025.
+
+## Estaciones disponibles por año
+
+Primero se revisaron las estaciones de monitoreo disponibles en cada una de las bases anuales.
+
+```{r}
+hojas <- lapply(archivos, excel_sheets)
+
+tabla_estaciones <- data.frame(
+  Año = 2020:2025,
+  Estaciones = sapply(hojas, length),
+  Nombres = sapply(hojas, paste, collapse = ", ")
+)
+
+knitr::kable(
+  tabla_estaciones[, c("Año", "Estaciones")],
+  col.names = c("Año", "Número de estaciones"),
+  caption = "Estaciones disponibles por año"
+)
+```
+
+Se observa que la cantidad de estaciones cambia en los primeros años. En 2020 se tienen 13 estaciones, en 2021 se tienen 14 y a partir de 2022 aparecen 15 estaciones por año.
+
+## Estructura de las bases de datos
+
+Después se revisó la estructura de los archivos para identificar diferencias en la forma en que se presentan las variables.
+
+```{r}
+estructura <- data.frame()
+
+for (i in seq_along(archivos)) {
+  año <- 2019 + i
+  
+  for (estacion in hojas[[i]]) {
+    datos <- read_excel(archivos[i], sheet = estacion, n_max = 2)
+    
+    estructura <- rbind(
+      estructura,
+      data.frame(
+        Año = año,
+        Estacion = estacion,
+        Columnas = paste(names(datos), collapse = ", ")
+      )
+    )
+  }
+}
+
+estructura$Formato <- match(
+  estructura$Columnas,
+  unique(estructura$Columnas)
+)
+
+tabla_formatos <- estructura %>%
+  select(Año, Estacion, Formato)
+
+resumen_formatos <- tabla_formatos %>%
+  count(Año, Formato)
+
+knitr::kable(
+  resumen_formatos,
+  col.names = c("Año", "Formato", "Estaciones"),
+  caption = "Formatos encontrados en las bases"
+)
+```
+
+Se encontraron tres formatos diferentes. Las bases de 2020 a 2023 mantienen la misma estructura, mientras que 2024 y 2025 presentan formatos distintos. Esto se debe tomar en cuenta antes de juntar las bases, ya que los nombres y tipos de algunas variables no se encuentran de la misma forma.
+
+## Variables disponibles
+
+Para conocer las variables de las bases, se tomó como referencia una de las estaciones y se revisaron los nombres de sus columnas.
+
+```{r}
+datos_ejemplo <- read_excel("../data/BD 2025.xlsx", sheet = "SE")
+variables <- names(datos_ejemplo)
+```
+
+Las bases contienen una variable de fecha y hora, además de mediciones de contaminantes y variables meteorológicas. Entre los contaminantes se encuentran CO, NO, NO2, NOX, O3, PM10, PM2.5 y SO2. También se tienen variables como presión atmosférica, precipitación, humedad relativa, radiación solar, temperatura, velocidad del viento y dirección del viento.
+
+Para el problema planteado, las variables de mayor interés son PM10, PM2.5 y NO2, ya que se busca estudiar sus diferencias entre las estaciones y posteriormente relacionarlas con características como la cobertura vegetal y la urbanización.
+
+## Cobertura temporal de los datos
+
+Se revisó el número de registros y el periodo disponible para cada estación, con el fin de detectar diferencias en la cobertura de las mediciones.
+
+```{r}
+cobertura <- data.frame()
+
+for (i in seq_along(archivos)) {
+  año <- 2019 + i
+  
+  for (estacion in hojas[[i]]) {
+    datos <- read_excel(archivos[i], sheet = estacion)
+    
+    if ("date" %in% names(datos)) {
+      fecha <- datos$date
+    } else {
+      fecha <- datos[["Fecha y hora"]]
+    }
+    
+    fecha <- fecha[!is.na(fecha)]
+    
+    cobertura <- rbind(
+      cobertura,
+      data.frame(
+        Año = año,
+        Estacion = estacion,
+        Registros = length(fecha),
+        Fecha_inicio = min(fecha),
+        Fecha_fin = max(fecha)
+      )
+    )
+  }
+}
+
+resumen_cobertura <- cobertura %>%
+  group_by(Año) %>%
+  summarise(
+    Estaciones = n(),
+    Registros_min = min(Registros),
+    Registros_max = max(Registros),
+    Fecha_inicio = min(Fecha_inicio),
+    Fecha_fin = max(Fecha_fin)
+  )
+
+knitr::kable(
+  resumen_cobertura,
+  col.names = c(
+    "Año", "Estaciones", "Registros mín.",
+    "Registros máx.", "Fecha inicial", "Fecha final"
+  ),
+  caption = "Cobertura temporal por año"
+)
+```
+
+La mayoría de los años tienen alrededor de 8,760 registros por estación, que corresponde aproximadamente a una medición por hora durante un año. Sin embargo, se observan diferencias importantes. En 2022 existe al menos una estación con muchos menos registros que las demás. Por otro lado, 2025 contiene alrededor de la mitad de los registros de un año completo, por lo que su periodo disponible debe considerarse antes de utilizarlo en comparaciones anuales.
+
+## Revisión de las diferencias de cobertura
+
+Para identificar qué estaciones presentan menos registros, se ordenaron las combinaciones de año y estación de menor a mayor número de observaciones.
+
+```{r}
+menor_cobertura <- cobertura %>%
+  arrange(Registros) %>%
+  head(15)
+
+knitr::kable(
+  menor_cobertura,
+  col.names = c(
+    "Año", "Estación", "Registros",
+    "Fecha inicial", "Fecha final"
+  ),
+  caption = "Estaciones con menor cobertura temporal"
+)
+```
+
+Esta revisión permite identificar las estaciones con menor cobertura sin eliminar información todavía. En particular, se observa que la estación NO3 en 2022 comienza a tener registros hasta diciembre, mientras que los datos disponibles de 2025 llegan hasta finales de junio. Estas diferencias deberán tomarse en cuenta al seleccionar los datos que se utilizarán posteriormente.
+
+## Estandarización para la exploración
+
+Debido a que los archivos tienen tres formatos diferentes, se estandarizaron temporalmente los nombres de las variables principales para poder comparar su disponibilidad. Esta modificación se realiza únicamente dentro de R y no cambia los archivos originales.
+
+```{r}
+faltantes <- data.frame()
+
+for (i in seq_along(archivos)) {
+  año <- 2019 + i
+  
+  for (estacion in hojas[[i]]) {
+    datos <- read_excel(archivos[i], sheet = estacion)
+    
+    # Estandarizar nombres de las columnas
+    names(datos) <- gsub(" \\(.*\\)", "", names(datos))
+    
+    # Quitar la fila de unidades cuando existe
+    if ("date" %in% names(datos)) {
+      datos <- datos[!is.na(datos$date), ]
+    }
+    
+    # Convertir las variables principales a numéricas
+    datos$PM10 <- suppressWarnings(as.numeric(datos$PM10))
+    datos$PM2.5 <- suppressWarnings(as.numeric(datos$PM2.5))
+    datos$NO2 <- suppressWarnings(as.numeric(datos$NO2))
+    
+    faltantes <- rbind(
+      faltantes,
+      data.frame(
+        Año = año,
+        Estacion = estacion,
+        Registros = nrow(datos),
+        PM10_faltantes = sum(is.na(datos$PM10)),
+        PM25_faltantes = sum(is.na(datos$PM2.5)),
+        NO2_faltantes = sum(is.na(datos$NO2))
+      )
+    )
+  }
+}
+```
+
+## Datos faltantes
+
+Se calculó el porcentaje de datos faltantes de PM10, PM2.5 y NO2 para cada estación y año.
+
+```{r}
+faltantes <- faltantes %>%
+  mutate(
+    PM10_pct = round(PM10_faltantes / Registros * 100, 2),
+    PM25_pct = round(PM25_faltantes / Registros * 100, 2),
+    NO2_pct = round(NO2_faltantes / Registros * 100, 2)
+  )
+
+resumen_faltantes <- faltantes %>%
+  group_by(Año) %>%
+  summarise(
+    PM10 = round(mean(PM10_pct), 2),
+    PM2.5 = round(mean(PM25_pct), 2),
+    NO2 = round(mean(NO2_pct), 2)
+  )
+
+knitr::kable(
+  resumen_faltantes,
+  col.names = c(
+    "Año", "PM10 (%)", "PM2.5 (%)", "NO2 (%)"
+  ),
+  caption = "Porcentaje promedio de datos faltantes"
+)
+```
+
+Los porcentajes muestran diferencias en la disponibilidad de los tres contaminantes entre los años. PM10 presenta porcentajes relativamente bajos de datos faltantes, mientras que PM2.5 tiene una mayor cantidad de datos faltantes en varios años. En el caso de NO2, 2020 presenta una cantidad considerablemente mayor de datos faltantes que los años siguientes.
+
+## Estaciones con mayor cantidad de datos faltantes
+
+También se revisaron las estaciones que presentan los porcentajes más altos de datos faltantes en alguna de las tres variables principales.
+
+```{r}
+mayor_faltantes <- faltantes %>%
+  select(Año, Estacion, PM10_pct, PM25_pct, NO2_pct) %>%
+  arrange(desc(PM10_pct + PM25_pct + NO2_pct)) %>%
+  head(15)
+
+knitr::kable(
+  mayor_faltantes,
+  col.names = c(
+    "Año", "Estación", "PM10 (%)",
+    "PM2.5 (%)", "NO2 (%)"
+  ),
+  caption = "Estaciones con mayor porcentaje de datos faltantes"
+)
+```
+
+Se encontraron estaciones que no cuentan con mediciones para alguna de las variables. Por ejemplo, existen casos con 100% de datos faltantes en PM2.5 o NO2. Esto deberá considerarse antes de seleccionar las estaciones que se utilizarán en el análisis.
+
+## Revisión de los rangos de las variables
+
+Como una primera revisión de calidad, se obtuvieron los valores mínimos y máximos de PM10, PM2.5 y NO2. En esta etapa no se eliminan valores, ya que los rangos de operación proporcionados por SIMA cambian dependiendo del año.
+
+```{r}
+rangos <- data.frame()
+
+for (i in seq_along(archivos)) {
+  año <- 2019 + i
+  
+  for (estacion in hojas[[i]]) {
+    datos <- read_excel(archivos[i], sheet = estacion)
+    
+    names(datos) <- gsub(" \\(.*\\)", "", names(datos))
+    
+    if ("date" %in% names(datos)) {
+      datos <- datos[!is.na(datos$date), ]
+    }
+    
+    datos$PM10 <- suppressWarnings(as.numeric(datos$PM10))
+    datos$PM2.5 <- suppressWarnings(as.numeric(datos$PM2.5))
+    datos$NO2 <- suppressWarnings(as.numeric(datos$NO2))
+    
+    rangos <- rbind(
+      rangos,
+      data.frame(
+        Año = año,
+        Estacion = estacion,
+        PM10_min = min(datos$PM10, na.rm = TRUE),
+        PM10_max = max(datos$PM10, na.rm = TRUE),
+        PM25_min = min(datos$PM2.5, na.rm = TRUE),
+        PM25_max = max(datos$PM2.5, na.rm = TRUE),
+        NO2_min = min(datos$NO2, na.rm = TRUE),
+        NO2_max = max(datos$NO2, na.rm = TRUE)
+      )
+    )
+  }
+}
+
+resumen_rangos <- rangos %>%
+  group_by(Año) %>%
+  summarise(
+    PM10_min = min(PM10_min),
+    PM10_max = max(PM10_max),
+    PM25_min = min(PM25_min),
+    PM25_max = max(PM25_max),
+    NO2_min = min(NO2_min),
+    NO2_max = max(NO2_max)
+  )
+
+knitr::kable(
+  resumen_rangos,
+  col.names = c(
+    "Año", "PM10 mín.", "PM10 máx.",
+    "PM2.5 mín.", "PM2.5 máx.",
+    "NO2 mín.", "NO2 máx."
+  ),
+  caption = "Rangos observados de las variables principales"
+)
+```
+
+Los valores obtenidos sirven como una primera revisión de posibles mediciones fuera de rango. Se encontraron algunos valores extremos, pero no se eliminaron observaciones en esta etapa, ya que primero deben compararse con los rangos de operación correspondientes a cada año y con las banderas de calidad proporcionadas por SIMA.
+
+## Resumen de la comprensión de los datos
+
+La exploración permitió encontrar diferencias importantes entre las bases. La cantidad de estaciones aumenta de 13 en 2020 a 15 a partir de 2022, además de que existen tres formatos distintos en los archivos. También se encontraron diferencias en la cantidad de registros disponibles entre estaciones y años.
+
+En cuanto a las variables principales, PM10 presenta una disponibilidad relativamente alta en la mayoría de los años. PM2.5 tiene una mayor cantidad de datos faltantes, mientras que NO2 presenta problemas importantes principalmente en 2020. También se identificaron estaciones con periodos incompletos, como NO3 en 2022, y se observó que la base de 2025 solamente contiene información hasta junio.
+
+Con estos resultados se tiene una primera idea de qué años y estaciones cuentan con información suficiente. La selección definitiva de los datos y el tratamiento de valores faltantes o fuera de rango se realizará en la etapa de preparación de los datos.
