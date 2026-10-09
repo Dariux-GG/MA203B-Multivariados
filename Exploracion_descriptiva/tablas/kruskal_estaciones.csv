@@ -1,0 +1,4 @@
+contaminante,estaciones,kruskal_H,p_valor,eta2_estacion,eta2_mes,media_min,est_min,media_max,est_max,razon_max_min
+PM10,15,59.756,0.0,0.169,0.705,41.565,NE3,65.182,SE2,1.568
+PM2.5,11,48.643,0.0,0.234,0.437,14.157,NO2,25.854,SE2,1.826
+NO2,15,118.808,0.0,0.417,0.392,8.925,SE2,25.511,NTE2,2.858
