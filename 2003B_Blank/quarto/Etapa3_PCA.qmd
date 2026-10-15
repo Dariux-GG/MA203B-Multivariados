@@ -1,0 +1,177 @@
+---
+title: "Etapa 3 - Análisis de Componentes Principales"
+format: html
+---
+
+## Justificación del PCA
+
+El PCA se utilizará como técnica de interdependencia para identificar patrones comunes entre los contaminantes, las variables meteorológicas y el NDVI, y resumir la información de varias variables correlacionadas en un número menor de componentes.
+
+## Carga de datos
+
+```{r}
+base <- read.csv("../../Exploracion_descriptiva/tablas/base_analitica_mensual.csv")
+
+dim(base)
+names(base)
+```
+
+## Variables para el PCA
+
+```{r}
+# Variables principales para el PCA
+datos_pca <- base[, c(
+  "PM10",
+  "PM2.5",
+  "NO2",
+  "TOUT",
+  "RH",
+  "RAINF",
+  "WSR",
+  "ndvi_500"
+)]
+
+# Revisar faltantes
+colSums(is.na(datos_pca))
+```
+
+## Observaciones completas
+
+```{r}
+# Conservar solo filas completas para las variables del PCA
+datos_pca_completos <- na.omit(datos_pca)
+
+# Comparar tamaño original y tamaño final
+dim(datos_pca)
+dim(datos_pca_completos)
+```
+
+## Análisis de Componentes Principales
+
+```{r}
+# Realizar PCA estandarizando las variables
+pca <- prcomp(datos_pca_completos, center = TRUE, scale. = TRUE)
+
+# Varianza explicada por cada componente
+summary(pca)
+```
+
+## Selección del número de componentes
+
+```{r}
+# Calcular autovalores
+autovalores <- pca$sdev^2
+
+# Tabla de varianza explicada
+tabla_varianza <- data.frame(
+  Componente = paste0("PC", 1:length(autovalores)),
+  Autovalor = round(autovalores, 3),
+  Varianza_pct = round(autovalores / sum(autovalores) * 100, 2),
+  Acumulada_pct = round(cumsum(autovalores / sum(autovalores) * 100), 2)
+)
+
+tabla_varianza
+
+# Gráfica de sedimentación
+plot(
+  autovalores,
+  type = "b",
+  xlab = "Componente principal",
+  ylab = "Autovalor",
+  main = "Gráfica de sedimentación"
+)
+
+abline(h = 1, lty = 2)
+```
+
+## Interpretación de los componentes
+
+```{r}
+# Cargas de las variables en los primeros 3 componentes
+cargas <- round(pca$rotation[, 1:3], 3)
+
+cargas
+```
+
+## Biplot de los componentes principales
+
+```{r}
+# Coordenadas de las observaciones
+scores <- pca$x[, 1:2]
+
+# Cargas de las variables
+cargas_plot <- pca$rotation[, 1:2]
+
+# Gráfica de las observaciones
+plot(
+  scores,
+  xlab = "PC1 (30.88%)",
+  ylab = "PC2 (20.84%)",
+  main = "PCA: primeros dos componentes",
+  pch = 16,
+  cex = 0.6
+)
+
+# Flechas de las variables
+factor_escala <- 4
+
+arrows(
+  0, 0,
+  cargas_plot[, 1] * factor_escala,
+  cargas_plot[, 2] * factor_escala,
+  length = 0.08
+)
+
+# Nombres de las variables
+text(
+  cargas_plot[, 1] * factor_escala * 1.12,
+  cargas_plot[, 2] * factor_escala * 1.12,
+  labels = rownames(cargas_plot),
+  cex = 0.8
+)
+
+abline(h = 0, v = 0, lty = 2)
+```
+
+## Adecuación del PCA
+
+```{r}
+# Matriz de correlaciones
+R <- cor(datos_pca_completos)
+
+# Número de observaciones y variables
+n <- nrow(datos_pca_completos)
+p <- ncol(datos_pca_completos)
+
+# KMO
+invR <- solve(R)
+parciales <- -cov2cor(invR)
+diag(parciales) <- 0
+
+R2 <- R^2
+diag(R2) <- 0
+
+P2 <- parciales^2
+
+kmo <- sum(R2) / (sum(R2) + sum(P2))
+
+# Prueba de Bartlett
+chi2 <- -(n - 1 - (2 * p + 5) / 6) * log(det(R))
+gl <- p * (p - 1) / 2
+p_bartlett <- pchisq(chi2, df = gl, lower.tail = FALSE)
+
+cat("KMO:", round(kmo, 3), "\n")
+cat("Bartlett chi-cuadrada:", round(chi2, 2), "\n")
+cat("Grados de libertad:", gl, "\n")
+cat("p-value:", format.pval(p_bartlett), "\n")
+```
+
+## Resultados e interpretación
+
+La adecuación de los datos para el PCA se revisó mediante el índice KMO y la prueba de esfericidad de Bartlett. Se obtuvo un KMO de 0.567, lo que muestra una adecuación limitada, aunque suficiente para utilizar el PCA con un propósito exploratorio. La prueba de Bartlett resultó significativa ($p < 0.001$), por lo que se rechaza la hipótesis de que las variables no están correlacionadas.
+
+El PCA se estimó con 157 observaciones completas de las 360 disponibles, debido principalmente a la cantidad de valores faltantes de PM$_{2.5}$. Por esta razón, los resultados se interpretan con un alcance exploratorio.
+
+Se conservaron tres componentes principales debido a que presentaron autovalores mayores a 1. En conjunto explican el 65.08% de la variabilidad total: PC1 explica 30.88%, PC2 20.84% y PC3 13.36%.
+
+El PC1 está principalmente relacionado con PM$_{10}$, PM$_{2.5}$, NO$_2$ y temperatura, mostrando un contraste entre las concentraciones de contaminantes y las condiciones meteorológicas. El PC2 está asociado principalmente con NDVI, humedad relativa y velocidad del viento, por lo que representa un componente relacionado con vegetación y condiciones de humedad. Finalmente, el PC3 está dominado principalmente por la precipitación, con una participación secundaria de NO$_2$ y NDVI.
