@@ -29,7 +29,7 @@ datos_pca <- base[, c(
   "RH",
   "RAINF",
   "WSR",
-  "ndvi_500"
+  "ndvi_2000"  # radio principal: 2000 m (igual que la regresión logística)
 )]
 
 # Revisar faltantes
@@ -106,8 +106,8 @@ cargas_plot <- pca$rotation[, 1:2]
 # Gráfica de las observaciones
 plot(
   scores,
-  xlab = "PC1 (30.88%)",
-  ylab = "PC2 (20.84%)",
+  xlab = paste0("PC1 (", round(autovalores[1] / sum(autovalores) * 100, 2), "%)"),
+  ylab = paste0("PC2 (", round(autovalores[2] / sum(autovalores) * 100, 2), "%)"),
   main = "PCA: primeros dos componentes",
   pch = 16,
   cex = 0.6
@@ -169,10 +169,10 @@ cat("p-value:", format.pval(p_bartlett), "\n")
 
 ## Resultados e interpretación
 
-La adecuación de los datos para el PCA se revisó mediante el índice KMO y la prueba de esfericidad de Bartlett. Se obtuvo un KMO de 0.567, lo que muestra una adecuación limitada, aunque suficiente para utilizar el PCA con un propósito exploratorio. La prueba de Bartlett resultó significativa ($p < 0.001$), por lo que se rechaza la hipótesis de que las variables no están correlacionadas.
+La adecuación de los datos para el PCA se revisó mediante el índice KMO y la prueba de esfericidad de Bartlett. Se obtuvo un KMO de `r round(kmo, 3)`, lo que muestra una adecuación limitada, aunque suficiente para utilizar el PCA con un propósito exploratorio. La prueba de Bartlett resultó significativa ($p < 0.001$), por lo que se rechaza la hipótesis de que las variables no están correlacionadas.
 
-El PCA se estimó con 157 observaciones completas de las 360 disponibles, debido principalmente a la cantidad de valores faltantes de PM$_{2.5}$. Por esta razón, los resultados se interpretan con un alcance exploratorio.
+El PCA se estimó con `r nrow(datos_pca_completos)` observaciones completas de las `r nrow(datos_pca)` disponibles, debido principalmente a la cantidad de valores faltantes de PM$_{2.5}$. Por esta razón, los resultados se interpretan con un alcance exploratorio.
 
-Se conservaron tres componentes principales debido a que presentaron autovalores mayores a 1. En conjunto explican el 65.08% de la variabilidad total: PC1 explica 30.88%, PC2 20.84% y PC3 13.36%.
+Se conservaron `r sum(autovalores > 1)` componentes principales debido a que presentaron autovalores mayores a 1. En conjunto explican el `r tabla_varianza$Acumulada_pct[3]`% de la variabilidad total: PC1 explica `r tabla_varianza$Varianza_pct[1]`%, PC2 `r tabla_varianza$Varianza_pct[2]`% y PC3 `r tabla_varianza$Varianza_pct[3]`%.
 
-El PC1 está principalmente relacionado con PM$_{10}$, PM$_{2.5}$, NO$_2$ y temperatura, mostrando un contraste entre las concentraciones de contaminantes y las condiciones meteorológicas. El PC2 está asociado principalmente con NDVI, humedad relativa y velocidad del viento, por lo que representa un componente relacionado con vegetación y condiciones de humedad. Finalmente, el PC3 está dominado principalmente por la precipitación, con una participación secundaria de NO$_2$ y NDVI.
+El PC1 contrapone PM$_{10}$, PM$_{2.5}$ y NO$_2$ (cargas negativas) con la temperatura, la velocidad del viento y el O$_3$ (cargas positivas): representa el ciclo estacional, en el que los meses cálidos y con más viento tienen menos partículas y NO$_2$ pero más ozono. El PC2 está asociado con la humedad relativa y el NDVI a 2000 m (positivas) frente al O$_3$ y la velocidad del viento (negativas), por lo que representa un componente de vegetación y humedad. Finalmente, el PC3 está dominado por la precipitación, con una participación de NO$_2$ y una carga negativa del NDVI. El NDVI no carga de forma importante en el PC1, el que concentra a los contaminantes, lo que coincide con la débil relación entre vegetación y contaminación observada en la regresión.

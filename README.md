@@ -8,7 +8,7 @@ Analizamos cómo la vegetación alrededor de las estaciones del SIMA se relacion
 
 ## Datos
 - **SIMA:** mediciones horarias de contaminantes y meteorología en 15 estaciones (`2003B_Blank/data/`).
-- **NDVI mensual y cobertura verde** (Sentinel-2 / Dynamic World) en radios alrededor de cada estación (`Exploracion_descriptiva/datos/`).
+- **NDVI mensual y cobertura verde** (Sentinel-2 / Dynamic World) en radios de 100, 300, 500, 1000 y 2000 m alrededor de cada estación (`Exploracion_descriptiva/datos/`). El radio principal del análisis es **2000 m**.
 
 ## Contenido
 | Archivo | Qué hace |
@@ -23,4 +23,9 @@ Analizamos cómo la vegetación alrededor de las estaciones del SIMA se relacion
 ```bash
 pip install pandas numpy scipy statsmodels scikit-learn matplotlib seaborn openpyxl jupyter
 ```
-Antes de correr la regresión logística, ajusta `RUTA` en la primera celda para que apunte a `Exploracion_descriptiva/tablas/base_analitica_mensual.csv`.
+Orden de ejecución (las rutas son relativas, corre cada notebook desde su propia carpeta):
+
+1. `Union_de_bases.ipynb` → genera `base_mensual_2024_2025.csv` (solo si cambian los datos del SIMA).
+2. `Exploracion_descriptiva/Etapa2_exploracion_descriptiva.ipynb` → genera `tablas/base_analitica_mensual.csv` con todos los radios.
+3. `Regresion_logistica/Etapa3_regresion_logistica_v3.ipynb` → el radio se cambia con `RADIO` en la primera celda.
+4. `2003B_Blank/quarto/Etapa3_PCA.qmd` → renderizar en RStudio.
