@@ -24,6 +24,7 @@ datos_pca <- base[, c(
   "PM10",
   "PM2.5",
   "NO2",
+  "O3",
   "TOUT",
   "RH",
   "RAINF",
