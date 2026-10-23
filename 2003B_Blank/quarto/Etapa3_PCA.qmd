@@ -3,6 +3,12 @@ title: "Etapa 3 - Análisis de Componentes Principales"
 format: html
 ---
 
+```{r}
+library(knitr)
+library(rmarkdown)
+```
+
+
 ## Justificación del PCA
 
 El PCA se utilizará como técnica de interdependencia para identificar patrones comunes entre los contaminantes, las variables meteorológicas y el NDVI, y resumir la información de varias variables correlacionadas en un número menor de componentes.
@@ -27,6 +33,7 @@ datos_pca <- base[, c(
   "O3",
   "TOUT",
   "RH",
+  "SR",
   "RAINF",
   "WSR",
   "ndvi_2000"  # radio principal: 2000 m (igual que la regresión logística)
@@ -96,7 +103,7 @@ cargas
 
 ## Biplot de los componentes principales
 
-```{r}
+```{r, fig.width=10, fig.height=7, dpi=300, fig.align='center', out.width='100%'}
 # Coordenadas de las observaciones
 scores <- pca$x[, 1:2]
 
